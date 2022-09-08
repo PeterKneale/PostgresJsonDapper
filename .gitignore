@@ -1,0 +1,50 @@
+#Ignore thumbnails created by Windows
+Thumbs.db
+#Ignore files built by Visual Studio
+*.obj
+*.exe
+*.pdb
+*.user
+*.aps
+*.pch
+*.vspscc
+*_i.c
+*_p.c
+*.ncb
+*.suo
+*.tlb
+*.tlh
+*.bak
+*.cache
+*.ilk
+*.log
+[Bb]in
+[Dd]ebug*/
+*.lib
+*.sbr
+obj/
+[Rr]elease*/
+_ReSharper*/
+[Tt]est[Rr]esult*
+.vs/
+#Nuget packages folder
+packages/
+.vscode/
+*.swp
+__pycache__
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# Ignore Specflow Generated Code
+*.feature.cs
+
+# Ignore SonarQube
+.sonarqube/*
+*.opencover.xml
+
+# Ignore nuget.config
+# The local file will contain the developers personal email and access token
+# the remote file will contain the placeholder to be replaced with the build process's access token
+nuget.config
