@@ -1,18 +1,109 @@
+# Postgres, Json + Dapper
 
-## indexes
+## Database schema
+- `cars` stores its data in a jsonb column
+- `cars` has the property 'registration` promoted to  a column for queryies or joins
+- `persons` stores its data in a jsonb column
+```cs
+public class Migration1 : Migration
+{
+    public override void Up()
+    {
+        Create.Table("cars")
+            .WithColumn("id").AsGuid().NotNullable().PrimaryKey()
+            .WithColumn("registration").AsString().Nullable().Unique()
+            .WithColumn("data").AsCustom("jsonb").NotNullable();
+                    
+        // Index Car.Owner.Id for use cases `ListCarsByOwner`
+        Execute.Sql("create index idx_car_owner_id on cars (((data->'Owner'->>'Id')::uuid));");
 
-### indexes created
-Create indexes for use cases `ListCarsByOwner`, `ListLicencedPerson` and `ListUnlicensedPerson`
-```postgresql
-create index idx_car_owner_id on cars (((data->'Owner'->>'Id')::uuid));
+        Create.Table("persons")
+            .WithColumn("id").AsGuid().NotNullable().PrimaryKey()
+            .WithColumn("data").AsCustom("jsonb").NotNullable();
 
-create index idx_person_has_licence on persons (((data ->> 'HasLicence')::bool));
+        // Index Person.HasLicence for use cases `ListLicencedPerson` and `ListUnlicensedPerson`
+        Execute.Sql("create index idx_person_has_licence on persons (((data ->> 'HasLicence')::bool));");
+    }
 ```
+
+## Use cases
+
+- Get By Id
+```cs
+public async Task<Car?> GetCar(CarId carId, CancellationToken token)
+{
+    var sql = "select data from cars where id = @id";
+    var parameters = new {id = carId.Id};
+    var result = await _connection.QuerySingleOrDefaultAsync<string>(sql, parameters);
+    if (result == null) return null;
+    return _json.FromJson<Car>(result);
+}
+```
+
+- Save, promoting a field on the domain object to a column in the table
+```cs
+public async Task SaveCar(Car car, CancellationToken token)
+{
+    var sql = "insert into cars (id, registration, data) values (@id, @registration, @data::jsonb)";
+    var json = _json.ToJson(car);
+    var parameters = new {id = car.Id.Id, registration = car.Registration?.RegistrationNumber, data = json};
+    await _connection.ExecuteAsync(sql, parameters);
+}
+```
+
+- Update, promoting a field on the domain object to a column in the table
+```cs
+public async Task UpdateCar(Car car, CancellationToken cancellationToken)
+{
+    var sql = "update cars set registration = @registration, data = @data::jsonb where id = @id";
+    var json = _json.ToJson(car);
+    var parameters = new {id = car.Id.Id, registration = car.Registration?.RegistrationNumber, data = json};
+    var result = await _connection.ExecuteAsync(sql, parameters);
+    if (result != 1)
+    {
+        throw new Exception("Record not updated");
+    }
+}
+```
+
+- Query, by a column in the table
+```cs
+public async Task<Car?> GetByRegistration(Registration registration, CancellationToken token)
+{
+    var sql = "select data from cars where registration = @registration";
+    var parameters = new {registration = registration.RegistrationNumber};
+    var result = await _connection.QuerySingleOrDefaultAsync<string>(sql, parameters);
+    if (result == null) return null;
+    return _json.FromJson<Car>(result);
+}
+```
+
+- Query, by a json attribute which is a uuid, with an index on it
+```cs
+public async Task<IReadOnlyCollection<Car>> ListByOwner(PersonId ownerId, CancellationToken token)
+{
+    var sql = "select data from cars where (data -> 'Owner' ->> 'Id')::uuid = @id;";
+    var parameters = new {id = ownerId.Id};
+    var results = await _connection.QueryAsync<string>(sql, parameters);
+    return results.Select(x => _json.FromJson<Car>(x)).ToList();
+}
+```
+    
+- Query, by a json attribute which is a boolean, with an index on it
+```cs
+public async Task<IReadOnlyCollection<Person>> ListLicenced(CancellationToken token)
+{
+    var sql = "select data from persons where (data ->> 'HasLicence')::bool = true";
+    var results = await _connection.QueryAsync<string>(sql);
+    return results.Select(x => _json.FromJson<Person>(x)).ToList();
+}
+```
+
 
 ### index usage
 Examine the index being used by running `explain analyze ...`
 
-```postgresql
+```sql
 -- query using idx_car_owner_id index
 explain analyze select data from cars where (data -> 'Owner' ->> 'Id')::uuid= 'f7c8bc0c-87d7-46d4-86f6-37db01e27ee3'::uuid;
 
@@ -37,7 +128,7 @@ Execution Time: 0.035 ms
 ```
 
 ## other queries
-```postgresql
+```sql
 select * from cars;
 select data -> 'Owner' as owner_as_json from cars;
 select data ->> 'Owner' as owner_as_string from cars;
