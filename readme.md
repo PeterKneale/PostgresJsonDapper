@@ -1,4 +1,5 @@
-# Postgres, Json + Dapper
+# Dotnet + Postgres, Jsonb and Dapper
+Demonstrates how to execute various use cases against a postgres database, storing aggregates in a jsonb column, indexing data within that jsonb data and querying against it. Also demonstrates the promotion of a json attribute to its own column for queries, joins or further indexing.
 
 ## Database schema
 - `cars` stores its data in a jsonb column
